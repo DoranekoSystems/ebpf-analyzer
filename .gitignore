@@ -1,0 +1,54 @@
+/bin/
+/dist/
+/.cache/
+/captures/
+/plugin/build/
+/frida/test/build/
+__pycache__/
+
+# Compiled objects and executables (recreated by build scripts)
+*.o
+*.exe
+*.dll
+*.so
+*.a
+*.class
+*.jar
+*.py[cod]
+/research/sigtrap/loader-amd64
+
+# Captured traffic and machine-specific test results
+*.pcap
+*.pcapng
+/frida/test/*-result.json
+/research/sigtrap/result*.json
+*.log
+
+# Local configuration and editor / OS files
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Local experiments and manual device diagnostics (not part of the project)
+/research/
+/go/cmd/smoke/
+/go/cmd/adbsmoke/
+/go/cmd/monitorsmoke/
+/go/cmd/stackprobe/
+/scripts/VerifySidecar.java
+/frida/test/
+/plugin/test/FridaViewTest.java
+/plugin/test/PluginSmoke.java
+/plugin/test/RecordedStreamTest.java
+/plugin/test/SymbolModeTest.java
+
+# Original demo recording; publish the compact GIF only.
+/source.mp4

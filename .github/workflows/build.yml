@@ -1,0 +1,114 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    name: Android x86_64 helpers
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - name: Install BPF compiler
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: Build device payload
+        run: bash scripts/build-device.sh
+      - name: Test Go packages
+        working-directory: go
+        run: go test ./internal/... ./cmd/monitor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-x86_64
+          path: bin/android-x86_64/
+          if-no-files-found: error
+          retention-days: 14
+
+  packetproxy:
+    name: PacketProxy compile dependency
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: DeNA/PacketProxy
+          ref: c84cba88accf96208abddbe77e417ce02f2dce3f
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Build upstream JAR
+        run: bash gradlew --no-daemon jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packetproxy-build-dependency
+          path: build/libs/PacketProxy.jar
+          if-no-files-found: error
+          retention-days: 1
+
+  desktop:
+    name: Desktop ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: [android, packetproxy]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-2022
+            goos: windows
+            goarch: amd64
+          - runner: ubuntu-24.04
+            goos: linux
+            goarch: amd64
+          - runner: macos-14
+            goos: darwin
+            goarch: arm64
+          - runner: macos-14
+            goos: darwin
+            goarch: amd64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go/go.mod
+          cache-dependency-path: go/go.sum
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-x86_64
+          path: bin/android-x86_64
+      - uses: actions/download-artifact@v4
+        with:
+          name: packetproxy-build-dependency
+          path: .cache/packetproxy
+      - name: Test host packages
+        working-directory: go
+        run: go test ./internal/... ./cmd/monitor
+      - name: Build plugin and desktop package
+        run: python scripts/build.py --packetproxy-jar .cache/packetproxy/PacketProxy.jar --os ${{ matrix.goos }} --arch ${{ matrix.goarch }}
+      - name: Check Python syntax
+        run: python -m py_compile frida/bridge.py frida/stream.py scripts/build.py scripts/go_notices.py scripts/test-plugin.py
+      - name: Test plugin UI models
+        run: python scripts/test-plugin.py --packetproxy-jar .cache/packetproxy/PacketProxy.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ebpf-analyzer-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
